@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
+/* The app is light-only. Tailwind's `dark` variant defaults to
+   prefers-color-scheme; repointing it at a class that is never set means every
+   existing `dark:` utility compiles to a selector that can't match, so the OS
+   theme can't flip the UI. Re-enable dark mode by deleting this line. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -12,15 +19,129 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Chart tokens, validated against the white surface they render on:
+   CVD ΔE 24.7, normal-vision ΔE 33.6, both series ≥ 3:1 contrast. */
+:root {
+  /* Top stop of the oversized 404 numeral. */
+  --color-404: var(--color-zinc-300);
+}
+
+.viz {
+  /* Brand-led categorical ramp, indigo first. This ordering was chosen by
+     running every permutation through the palette validator and keeping only
+     those with zero warnings: worst adjacent CVD ΔE 16.1 (target ≥8),
+     normal-vision ΔE 17.4 (floor ≥15), all six ≥3:1 on white.
+     Assign these in order — never cycle or invent a seventh. */
+  --viz-cat-1: #4f46e5;
+  --viz-cat-2: #ea580c;
+  --viz-cat-3: #0891b2;
+  --viz-cat-4: #16a34a;
+  --viz-cat-5: #9333ea;
+  --viz-cat-6: #db2777;
+
+  --viz-series-1: #2a78d6; /* billable */
+  --viz-series-2: #eb6834; /* internal */
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-muted: #898781;
+  --viz-surface: #ffffff;
+}
+
+/* Auth entrance animations. `both` holds the from-state before the delay so
+   staggered elements don't flash at full opacity first. */
+@keyframes auth-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes auth-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes auth-zoom {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.animate-auth-up {
+  animation: auth-fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-auth-fade {
+  animation: auth-fade 0.9s ease-out both;
+}
+
+.animate-auth-zoom {
+  animation: auth-zoom 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-toast-in {
+  animation: toast-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Motion is decorative here — drop it entirely when the OS asks. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-auth-up,
+  .animate-auth-fade,
+  .animate-auth-zoom,
+  .animate-toast-in {
+    animation: none;
+  }
+}
+
+/* Printing a payslip: hide the app chrome so the sheet comes out clean.
+   `visibility` rather than `display` keeps the payslip's layout intact. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .payslip-sheet,
+  .payslip-sheet * {
+    visibility: visible;
+  }
+
+  .payslip-sheet {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .payslip-noprint {
+    display: none !important;
+  }
 }

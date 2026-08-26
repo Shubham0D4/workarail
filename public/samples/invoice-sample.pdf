@@ -1,0 +1,40 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 522 >>
+stream
+BT /F1 20 Tf 60 760 Td (Work a Rail) Tj ET
+BT /F1 11 Tf 60 735 Td (INVOICE  WR-2041) Tj ET
+BT /F1 10 Tf 60 700 Td (Bill to: Northline Transit) Tj ET
+BT /F1 10 Tf 60 684 Td (Issued: 2026-08-03    Due: 2026-09-02) Tj ET
+BT /F1 10 Tf 60 650 Td (Description                          Amount) Tj ET
+BT /F1 10 Tf 60 634 Td (Contract staffing, August            GBP 12,480.00) Tj ET
+BT /F1 12 Tf 60 600 Td (Total due: GBP 12,480.00) Tj ET
+BT /F1 8 Tf 60 60 Td (Sample document for demo purposes.) Tj ET
+0.6 w 60 620 m 520 620 l S
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000813 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+883
+%%EOF

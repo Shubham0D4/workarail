@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 820" width="640" height="820" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <rect width="640" height="820" fill="#f4f4f5"/>
+  <rect x="40" y="40" width="560" height="740" rx="14" fill="#ffffff" stroke="#e4e4e7"/>
+
+  <circle cx="320" cy="140" r="34" fill="#0ca30c" fill-opacity="0.12"/>
+  <path d="M306 140l10 10 18-19" fill="none" stroke="#0ca30c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="320" y="212" text-anchor="middle" font-size="20" font-weight="600" fill="#18181b">Payment received</text>
+  <text x="320" y="240" text-anchor="middle" font-size="13" fill="#71717a">Bank transfer confirmation</text>
+
+  <text x="320" y="312" text-anchor="middle" font-size="40" font-weight="700" fill="#18181b">£12,480.00</text>
+
+  <line x1="80" y1="366" x2="560" y2="366" stroke="#e4e4e7"/>
+
+  <g font-size="13">
+    <text x="80" y="404" fill="#71717a">Invoice</text>
+    <text x="560" y="404" text-anchor="end" fill="#18181b" font-weight="500">WR-2041</text>
+
+    <text x="80" y="444" fill="#71717a">Paid by</text>
+    <text x="560" y="444" text-anchor="end" fill="#18181b" font-weight="500">Northline Transit</text>
+
+    <text x="80" y="484" fill="#71717a">Date</text>
+    <text x="560" y="484" text-anchor="end" fill="#18181b" font-weight="500">14 August 2026</text>
+
+    <text x="80" y="524" fill="#71717a">Method</text>
+    <text x="560" y="524" text-anchor="end" fill="#18181b" font-weight="500">Faster Payments</text>
+
+    <text x="80" y="564" fill="#71717a">Reference</text>
+    <text x="560" y="564" text-anchor="end" fill="#18181b" font-weight="500">FP-8841-20260814</text>
+  </g>
+
+  <line x1="80" y1="600" x2="560" y2="600" stroke="#e4e4e7"/>
+
+  <text x="80" y="640" font-size="13" fill="#71717a">Status</text>
+  <rect x="470" y="624" width="90" height="24" rx="12" fill="#0ca30c" fill-opacity="0.12"/>
+  <text x="515" y="641" text-anchor="middle" font-size="12" font-weight="600" fill="#006300">Cleared</text>
+
+  <text x="320" y="724" text-anchor="middle" font-size="11" fill="#a1a1aa">Sample document for demo purposes</text>
+</svg>
