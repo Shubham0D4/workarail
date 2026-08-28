@@ -35,3 +35,14 @@ export type ResetState = {
 }
 
 export const initialResetState: ResetState = { status: 'idle' }
+
+export type PasswordResetState = {
+  error?: string
+  success?: boolean
+  values?: {
+    password?: string
+    confirmPassword?: string
+  }
+}
+
+export const initialPasswordResetState: PasswordResetState = {}

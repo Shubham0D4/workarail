@@ -2,12 +2,10 @@
 
 import { useState } from 'react'
 import {
-  expenses,
   formatMoney,
-  invoices,
-  monthlyFinance,
-  payrollCost,
   type MonthPoint,
+  type Expense,
+  type Invoice,
 } from '@/app/lib/admin-data'
 import {
   CategorySpend,
@@ -43,8 +41,22 @@ function tick(pence: number) {
   return `£${Math.round(pounds)}`
 }
 
-export function FinanceAnalytics() {
-  const data = monthlyFinance()
+export function FinanceAnalytics({
+  initialMonthlyFinance,
+  initialInvoices,
+  initialExpenses,
+  initialPayrollCost,
+}: {
+  initialMonthlyFinance: MonthPoint[]
+  initialInvoices: Invoice[]
+  initialExpenses: Expense[]
+  initialPayrollCost: number
+}) {
+  const data = initialMonthlyFinance
+  const invoicesData = initialInvoices
+  const expensesData = initialExpenses
+  const payrollCostVal = initialPayrollCost
+
   const [active, setActive] = useState<number | null>(null)
   const [showTable, setShowTable] = useState(false)
 
@@ -54,12 +66,12 @@ export function FinanceAnalytics() {
   const margin = earned ? Math.round((net / earned) * 100) : 0
 
   // Round the axis up to a whole 10k so every tick is a clean figure.
-  const peak = Math.max(...data.flatMap((d) => [d.earnedPence, d.spentPence]))
+  const peak = Math.max(0, ...data.flatMap((d) => [d.earnedPence, d.spentPence]))
   const step = 1000000
-  const max = Math.ceil(peak / step) * step
+  const max = Math.max(step, Math.ceil(peak / step) * step)
   const ticks = Array.from({ length: max / step + 1 }, (_, i) => i * step)
 
-  const band = PLOT_W / data.length
+  const band = PLOT_W / (data.length || 1)
   const barW = Math.min(34, (band * 0.62 - GAP) / 2)
   const groupW = barW * 2 + GAP
 
@@ -70,7 +82,7 @@ export function FinanceAnalytics() {
 
   // Where the money comes from and goes, for the two breakdown panels.
   const byClient = Object.entries(
-    invoices
+    invoicesData
       .filter((i) => i.status !== 'draft')
       .reduce<Record<string, number>>((acc, i) => {
         acc[i.client] = (acc[i.client] ?? 0) + i.amountPence
@@ -78,11 +90,11 @@ export function FinanceAnalytics() {
       }, {})
   ).sort((a, b) => b[1] - a[1])
 
-  const expenseTotal = expenses
+  const expenseTotal = expensesData
     .filter((e) => e.status !== 'rejected')
     .reduce((n, e) => n + e.amountPence, 0)
   const spendSplit: [string, number][] = [
-    ['Payroll', payrollCost()],
+    ['Payroll', payrollCostVal],
     ['Expenses', expenseTotal],
   ]
 
@@ -209,8 +221,8 @@ export function FinanceAnalytics() {
       <NetTrend data={data} />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <CategorySpend />
-        <Receivables />
+        <CategorySpend initialExpenses={expensesData} />
+        <Receivables initialInvoices={invoicesData} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

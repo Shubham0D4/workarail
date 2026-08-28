@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { PAY_ALLOWANCE_PENCE, formatMoney } from '@/app/lib/admin-data'
 import { useRegisterPageAction } from '@/app/ui/admin/page-action'
 import { useToast } from '@/app/ui/toast'
+import { saveSettings } from '@/app/actions/admin'
 
 const SECTIONS = [
   { id: 'organisation', label: 'Organisation', icon: BuildingIcon },
@@ -12,18 +13,24 @@ const SECTIONS = [
   { id: 'holidays', label: 'Public holidays', icon: GlobeIcon },
   { id: 'notifications', label: 'Notifications', icon: BellIcon },
   { id: 'security', label: 'Security', icon: ShieldIcon },
+  { id: 'smtp', label: 'SMTP settings', icon: MailIcon },
 ] as const
 
 /** One control height across the whole form, matching the rest of the app. */
 const control =
   'h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40'
 
-export function SettingsForm({ holidays }: { holidays?: React.ReactNode }) {
-  // TODO: settings live in the form only — they reset on reload. Wire this to
-  // a Server Action to persist them.
+export function SettingsForm({
+  holidays,
+  initialSettings,
+}: {
+  holidays?: React.ReactNode
+  initialSettings: any
+}) {
   const formRef = useRef<HTMLFormElement>(null)
   const [dirty, setDirty] = useState(false)
   const toast = useToast()
+  const settings = initialSettings
 
   useRegisterPageAction('Save changes', () =>
     formRef.current?.requestSubmit()
@@ -43,13 +50,46 @@ export function SettingsForm({ holidays }: { holidays?: React.ReactNode }) {
 
       <form
         ref={formRef}
-        // Uncontrolled fields, so any edit marks the form dirty and Discard is
-        // a plain form reset — no per-field state to keep in sync.
         onChange={() => setDirty(true)}
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault()
           setDirty(false)
-          toast('Settings saved for this session.')
+          toast('Settings saved.')
+          try {
+            const data = new FormData(e.currentTarget)
+            const settingsObj = {
+              company: String(data.get('company')),
+              email: String(data.get('email')),
+              timezone: String(data.get('timezone')),
+              currency: String(data.get('currency')),
+              payday: String(data.get('payday')),
+              allowance: String(data.get('allowance')),
+              tax: Number(data.get('tax')),
+              ni: Number(data.get('ni')),
+              pension: Number(data.get('pension')),
+              leaveDays: Number(data.get('leaveDays')),
+              carryOver: Number(data.get('carryOver')),
+              workingDays: String(data.get('workingDays')),
+              standardDay: Number(data.get('standardDay')),
+              notifyLeave: data.get('notifyLeave') === 'on',
+              notifyExpenses: data.get('notifyExpenses') === 'on',
+              notifyPayroll: data.get('notifyPayroll') === 'on',
+              notifyCelebrations: data.get('notifyCelebrations') === 'on',
+              sessionTimeout: String(data.get('sessionTimeout')),
+              twoFactor: data.get('twoFactor') === 'on',
+              auditLog: data.get('auditLog') === 'on',
+              smtpHost: String(data.get('smtpHost') || ''),
+              smtpPort: Number(data.get('smtpPort') || 587),
+              smtpSecure: data.get('smtpSecure') === 'on',
+              smtpUser: String(data.get('smtpUser') || ''),
+              smtpPass: String(data.get('smtpPass') || ''),
+              smtpFrom: String(data.get('smtpFrom') || ''),
+            }
+            await saveSettings(settingsObj)
+          } catch (err) {
+            console.error(err)
+            toast('Failed to save settings.', 'error')
+          }
         }}
         onReset={() => setDirty(false)}
         className="flex min-w-0 flex-1 flex-col gap-6"
@@ -60,16 +100,16 @@ export function SettingsForm({ holidays }: { holidays?: React.ReactNode }) {
           description="How the company appears across the app and on documents."
         >
           <Row label="Company name">
-            <input name="company" defaultValue="Work à Rail" className={control} />
+            <input name="company" defaultValue={settings.company} className={control} />
           </Row>
           <Row label="Contact email">
-            <input name="email" type="email" defaultValue="admin@workarail.com" className={control} />
+            <input name="email" type="email" defaultValue={settings.email} className={control} />
           </Row>
           <Row label="Time zone">
-            <Select name="timezone" defaultValue="Europe/London" options={['Europe/London', 'Europe/Dublin', 'Europe/Paris', 'UTC']} />
+            <Select name="timezone" defaultValue={settings.timezone} options={['Europe/London', 'Europe/Dublin', 'Europe/Paris', 'UTC']} />
           </Row>
           <Row label="Currency" hint="Used for payroll, invoices and expenses.">
-            <Select name="currency" defaultValue="GBP (£)" options={['GBP (£)', 'EUR (€)', 'USD ($)']} />
+            <Select name="currency" defaultValue={settings.currency} options={['GBP (£)', 'EUR (€)', 'USD ($)']} />
           </Row>
         </Section>
 
@@ -79,16 +119,16 @@ export function SettingsForm({ holidays }: { holidays?: React.ReactNode }) {
           description="Rates applied when a pay run is calculated. Changing these recalculates every payslip in the next run."
         >
           <Row label="Pay day">
-            <Select name="payday" defaultValue="Last working day" options={['Last working day', '25th of the month', '1st of the month']} />
+            <Select name="payday" defaultValue={settings.payday} options={['Last working day', '25th of the month', '1st of the month']} />
           </Row>
-          <Row label="Personal allowance" hint={`Currently ${formatMoney(PAY_ALLOWANCE_PENCE)} per month.`}>
-            <input name="allowance" type="number" step="0.01" defaultValue={(PAY_ALLOWANCE_PENCE / 100).toFixed(2)} className={control} />
+          <Row label="Personal allowance" hint={`Currently ${formatMoney(Number(settings.allowance) * 100)} per month.`}>
+            <input name="allowance" type="number" step="0.01" defaultValue={settings.allowance} className={control} />
           </Row>
           <Row label="Deduction rates" hint="Applied to pay above the allowance." group>
             <div className="grid grid-cols-3 gap-3">
-              <Percent name="tax" label="Tax" defaultValue={20} />
-              <Percent name="ni" label="NI" defaultValue={8} />
-              <Percent name="pension" label="Pension" defaultValue={5} />
+              <Percent name="tax" label="Tax" defaultValue={settings.tax} />
+              <Percent name="ni" label="NI" defaultValue={settings.ni} />
+              <Percent name="pension" label="Pension" defaultValue={settings.pension} />
             </div>
           </Row>
         </Section>
@@ -99,16 +139,16 @@ export function SettingsForm({ holidays }: { holidays?: React.ReactNode }) {
           description="Entitlements and the working pattern behind timesheets."
         >
           <Row label="Annual leave" hint="Days per year, excluding public holidays.">
-            <input name="leaveDays" type="number" defaultValue={28} className={control} />
+            <input name="leaveDays" type="number" defaultValue={settings.leaveDays} className={control} />
           </Row>
           <Row label="Carry-over limit" hint="Unused days that roll into next year.">
-            <input name="carryOver" type="number" defaultValue={5} className={control} />
+            <input name="carryOver" type="number" defaultValue={settings.carryOver} className={control} />
           </Row>
           <Row label="Working days">
-            <Select name="workingDays" defaultValue="Monday to Friday" options={['Monday to Friday', 'Monday to Saturday', 'Custom']} />
+            <Select name="workingDays" defaultValue={settings.workingDays} options={['Monday to Friday', 'Monday to Saturday', 'Custom']} />
           </Row>
           <Row label="Standard day" hint="Hours credited for a full day on a timesheet.">
-            <input name="standardDay" type="number" step="0.5" defaultValue={8} className={control} />
+            <input name="standardDay" type="number" step="0.5" defaultValue={settings.standardDay} className={control} />
           </Row>
         </Section>
 
@@ -117,12 +157,12 @@ export function SettingsForm({ holidays }: { holidays?: React.ReactNode }) {
         <Section
           id="notifications"
           title="Notifications"
-          description="Emails sent to admin@workarail.com."
+          description={`Emails sent to ${settings.email}.`}
         >
-          <Toggle name="notifyLeave" label="Leave requests" hint="When someone submits a request for approval." defaultChecked />
-          <Toggle name="notifyExpenses" label="Expense claims" hint="When a claim is submitted or a receipt is missing." defaultChecked />
-          <Toggle name="notifyPayroll" label="Payroll run" hint="A reminder two days before pay day." defaultChecked />
-          <Toggle name="notifyCelebrations" label="Celebrations" hint="A weekly digest of upcoming birthdays and anniversaries." />
+          <Toggle name="notifyLeave" label="Leave requests" hint="When someone submits a request for approval." defaultChecked={settings.notifyLeave} />
+          <Toggle name="notifyExpenses" label="Expense claims" hint="When a claim is submitted or a receipt is missing." defaultChecked={settings.notifyExpenses} />
+          <Toggle name="notifyPayroll" label="Payroll run" hint="A reminder two days before pay day." defaultChecked={settings.notifyPayroll} />
+          <Toggle name="notifyCelebrations" label="Celebrations" hint="A weekly digest of upcoming birthdays and anniversaries." defaultChecked={settings.notifyCelebrations} />
         </Section>
 
         <Section
@@ -131,10 +171,33 @@ export function SettingsForm({ holidays }: { holidays?: React.ReactNode }) {
           description="Who can reach the admin area and how sessions behave."
         >
           <Row label="Session timeout" hint="Signed out after this long without activity.">
-            <Select name="sessionTimeout" defaultValue="8 hours" options={['1 hour', '8 hours', '24 hours', 'Never']} />
+            <Select name="sessionTimeout" defaultValue={settings.sessionTimeout} options={['1 hour', '8 hours', '24 hours', 'Never']} />
           </Row>
-          <Toggle name="twoFactor" label="Require two-factor" hint="Every admin must confirm sign-in with a second factor." defaultChecked />
-          <Toggle name="auditLog" label="Keep an audit log" hint="Record approvals, pay runs and setting changes." defaultChecked />
+          <Toggle name="twoFactor" label="Require two-factor" hint="Every admin must confirm sign-in with a second factor." defaultChecked={settings.twoFactor} />
+          <Toggle name="auditLog" label="Keep an audit log" hint="Record approvals, pay runs and setting changes." defaultChecked={settings.auditLog} />
+        </Section>
+
+        <Section
+          id="smtp"
+          title="SMTP Settings"
+          description="Configure the email server settings used to send authentication and notification emails."
+        >
+          <Row label="SMTP host" hint="The address of your outgoing mail server (e.g. smtp.gmail.com).">
+            <input name="smtpHost" defaultValue={settings.smtpHost} placeholder="smtp.gmail.com" className={control} />
+          </Row>
+          <Row label="SMTP port" hint="Normally 587 for TLS or 465 for SSL.">
+            <input name="smtpPort" type="number" defaultValue={settings.smtpPort || 587} placeholder="587" className={control} />
+          </Row>
+          <Toggle name="smtpSecure" label="Secure connection" hint="Use SSL/TLS encryption for the SMTP server connection." defaultChecked={settings.smtpSecure} />
+          <Row label="Username" hint="The login user for the SMTP server.">
+            <input name="smtpUser" defaultValue={settings.smtpUser} placeholder="user@gmail.com" className={control} />
+          </Row>
+          <Row label="Password" hint="The password or App Password for the SMTP server.">
+            <input name="smtpPass" type="password" defaultValue={settings.smtpPass} placeholder="••••••••••••••••" className={control} />
+          </Row>
+          <Row label="Sender email" hint="The address shown in the 'From' field (e.g. noreply@workarail.com).">
+            <input name="smtpFrom" defaultValue={settings.smtpFrom} placeholder="noreply@workarail.com" className={control} />
+          </Row>
         </Section>
 
         {/* Sticky only while there is something to lose. */}
@@ -474,6 +537,15 @@ function ShieldIcon() {
     <svg {...NAV_ICON}>
       <path d="M12 3.5 5 6v6c0 4.2 2.9 7.6 7 8.5 4.1-.9 7-4.3 7-8.5V6Z" />
       <path d="m9.5 12 1.8 1.8L15 10" />
+    </svg>
+  )
+}
+
+function MailIcon() {
+  return (
+    <svg {...NAV_ICON}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
     </svg>
   )
 }

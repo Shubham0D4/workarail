@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   formatMoney,
   invoices,
@@ -14,6 +14,8 @@ import {
   type PreviewTarget,
 } from '@/app/ui/admin/attachment-preview'
 import { STAT_ICON, StatCard } from '@/app/ui/admin/stat-card'
+import { useRegisterPageAction } from '@/app/ui/admin/page-action'
+import { addInvoice, getClients } from '@/app/actions/admin'
 
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -48,7 +50,7 @@ const STATUS: Record<InvoiceStatus, { label: string; badge: string; tone: string
   }
 
 /** The one attachment this invoice carries, wrapped for the shared viewer. */
-function targetFor(inv: Invoice): PreviewTarget {
+function targetFor(inv: Invoice, todayStr: string): PreviewTarget {
   const file = inv.document ?? inv.proof
   const role = inv.document ? 'Invoice document' : 'Payment proof'
   return {
@@ -56,7 +58,7 @@ function targetFor(inv: Invoice): PreviewTarget {
     title: inv.id,
     subtitle: `${role} · ${inv.client} · ${formatMoney(inv.amountPence)} · ${file.size}`,
     note:
-      inv.due < today && inv.status !== 'paid'
+      inv.due < todayStr && inv.status !== 'paid'
         ? `Due ${shortDate(inv.due)} · past due`
         : `Due ${shortDate(inv.due)}`,
   }
@@ -64,13 +66,32 @@ function targetFor(inv: Invoice): PreviewTarget {
 
 const ORDER: InvoiceStatus[] = ['paid', 'pending', 'overdue', 'draft']
 
-export function InvoicesTable() {
+export function InvoicesTable({
+  initialInvoices,
+  todayDate,
+}: {
+  initialInvoices?: Invoice[]
+  todayDate?: string
+}) {
+  const invoicesData = initialInvoices || invoices
+  const activeToday = todayDate || today
   const [status, setStatus] = useState<InvoiceStatus | 'all'>('all')
   const [query, setQuery] = useState('')
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
 
+  const [adding, setAdding] = useState(false)
+  const [clients, setClients] = useState<Array<{ id: string; name: string }>>([])
+
+  useEffect(() => {
+    if (adding) {
+      getClients().then(setClients)
+    }
+  }, [adding])
+
+  useRegisterPageAction('New invoice', () => setAdding(true))
+
   const q = query.trim().toLowerCase()
-  const rows = invoices.filter((inv) => {
+  const rows = invoicesData.filter((inv) => {
     if (status !== 'all' && inv.status !== status) return false
     if (!q) return true
     return [inv.id, inv.client, inv.reference].some((f) =>
@@ -79,9 +100,9 @@ export function InvoicesTable() {
   })
 
   const sum = (s: InvoiceStatus) =>
-    invoices.filter((i) => i.status === s).reduce((n, i) => n + i.amountPence, 0)
+    invoicesData.filter((i) => i.status === s).reduce((n, i) => n + i.amountPence, 0)
   const count = (s: InvoiceStatus) =>
-    invoices.filter((i) => i.status === s).length
+    invoicesData.filter((i) => i.status === s).length
 
   return (
     <div className="flex flex-col gap-6">
@@ -95,7 +116,7 @@ export function InvoicesTable() {
       <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           <span className="text-sm text-zinc-500 dark:text-zinc-400">
-            {rows.length} of {invoices.length} invoices
+            {rows.length} of {invoicesData.length} invoices
           </span>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -214,14 +235,14 @@ export function InvoicesTable() {
                           {inv.document ? (
                             <FileChip
                               file={inv.document}
-                              onOpen={() => setPreview(targetFor(inv))}
+                              onOpen={() => setPreview(targetFor(inv, activeToday))}
                             />
                           ) : null}
                           {inv.proof ? (
                             <FileChip
                               file={inv.proof}
                               proof
-                              onOpen={() => setPreview(targetFor(inv))}
+                              onOpen={() => setPreview(targetFor(inv, activeToday))}
                             />
                           ) : null}
                         </div>
@@ -233,6 +254,141 @@ export function InvoicesTable() {
             </tbody>
           </table>
         </div>
+
+        {adding && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">New Invoice</h3>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  const form = e.currentTarget
+                  const formData = new FormData(form)
+                  const clientName = formData.get('clientName') as string
+                  const reference = formData.get('reference') as string
+                  const amountPence = Math.round(parseFloat(formData.get('amount') as string) * 100)
+                  const issued = formData.get('issued') as string
+                  const due = formData.get('due') as string
+                  const status = formData.get('status') as string
+
+                  try {
+                    await addInvoice({ clientName, reference, amountPence, issued, due, status })
+                    setAdding(false)
+                  } catch (err) {
+                    alert(String(err))
+                  }
+                }}
+                className="mt-4 flex flex-col gap-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Client Name
+                  </label>
+                  <input
+                    type="text"
+                    name="clientName"
+                    list="client-suggestions"
+                    required
+                    placeholder="e.g. Network Rail"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                  <datalist id="client-suggestions">
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.name} />
+                    ))}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Reference
+                  </label>
+                  <input
+                    type="text"
+                    name="reference"
+                    required
+                    placeholder="e.g. Q3 track maintenance"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Amount (£)
+                    </label>
+                    <input
+                      type="number"
+                      name="amount"
+                      step="0.01"
+                      required
+                      placeholder="e.g. 1500.00"
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Status
+                    </label>
+                    <select
+                      name="status"
+                      required
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="paid">Paid</option>
+                      <option value="overdue">Overdue</option>
+                      <option value="draft">Draft</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Issue Date
+                    </label>
+                    <input
+                      type="date"
+                      name="issued"
+                      required
+                      defaultValue={activeToday}
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      name="due"
+                      required
+                      defaultValue={activeToday}
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdding(false)}
+                    className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                  >
+                    Save
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </section>
 
       <AttachmentPreview target={preview} onClose={() => setPreview(null)} />

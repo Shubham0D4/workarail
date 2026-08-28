@@ -1,0 +1,231 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  staff         Staff?
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  issuer                String    @default("local:credential")
+
+  @@unique([providerId, accountId])
+  @@unique([issuer, accountId])
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Crew {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  staff     Staff[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Job {
+  id        String   @id
+  title     String
+  staff     Staff[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Staff {
+  ref          String          @id
+  name         String
+  email        String          @unique
+  phone        String
+  role         String
+  crewId       String
+  crew         Crew            @relation(fields: [crewId], references: [id])
+  currentJobId String?
+  currentJob   Job?            @relation(fields: [currentJobId], references: [id])
+  status       String          // 'on-site' | 'available' | 'off-shift'
+  joined       DateTime
+  birthday     String          // MM-DD
+  userId       String?         @unique
+  user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attendance   Attendance[]
+  leaveRequests LeaveRequest[]
+  expenses     Expense[]
+  payroll      PayrollRecord[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([crewId])
+  @@index([currentJobId])
+  @@index([status])
+}
+
+model Attendance {
+  id        String   @id @default(uuid())
+  staffRef  String
+  staff     Staff    @relation(fields: [staffRef], references: [ref], onDelete: Cascade)
+  date      DateTime
+  code      String   // 'P' | 'H' | 'L' | 'A' | '-'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([staffRef, date])
+}
+
+model LeaveRequest {
+  id        String   @id
+  staffRef  String
+  staff     Staff    @relation(fields: [staffRef], references: [ref], onDelete: Cascade)
+  type      String   // 'annual' | 'sick' | 'unpaid' | 'parental' | 'compassionate'
+  from      DateTime
+  to        DateTime
+  days      Int
+  reason    String
+  status    String   // 'pending' | 'approved' | 'rejected'
+  submitted DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([staffRef])
+  @@index([status])
+}
+
+model Attachment {
+  id        String    @id @default(uuid())
+  name      String
+  kind      String    // 'pdf' | 'image'
+  size      String
+  url       String
+  invoicesDoc Invoice[] @relation("InvoiceDocument")
+  invoicesPrf Invoice[] @relation("InvoiceProof")
+  expenses   Expense[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Client {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  invoices  Invoice[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Invoice {
+  id          String      @id
+  clientId    String
+  client      Client      @relation(fields: [clientId], references: [id])
+  reference   String
+  amountPence Int
+  issued      DateTime
+  due         DateTime
+  status      String      // 'paid' | 'pending' | 'overdue' | 'draft'
+  documentId  String?
+  document    Attachment? @relation("InvoiceDocument", fields: [documentId], references: [id])
+  proofId     String?
+  proof       Attachment? @relation("InvoiceProof", fields: [proofId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([clientId])
+  @@index([status])
+  @@index([issued])
+}
+
+model Expense {
+  id          String      @id
+  date        DateTime
+  category    String      // 'travel' | 'materials' | 'equipment' | 'meals' | 'training' | 'other'
+  merchant    String
+  description String
+  amountPence Int
+  staffRef    String
+  staff       Staff       @relation(fields: [staffRef], references: [ref], onDelete: Cascade)
+  method      String      // 'company-card' | 'personal' | 'cash'
+  status      String      // 'submitted' | 'approved' | 'reimbursed' | 'rejected'
+  receiptId   String?
+  receipt     Attachment? @relation(fields: [receiptId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([staffRef])
+  @@index([status])
+  @@index([date])
+}
+
+model PayrollRecord {
+  id           String    @id @default(uuid())
+  staffRef     String
+  staff        Staff     @relation(fields: [staffRef], references: [ref], onDelete: Cascade)
+  year         Int
+  month        Int
+  grossPence   Int
+  taxPence     Int
+  niPence      Int
+  pensionPence Int
+  netPence     Int
+  status       String    // 'paid' | 'pending'
+  paidOn       DateTime?
+  reference    String    @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([staffRef, year, month])
+}
+
+model SmtpSettings {
+  id        String   @id @default("default")
+  host      String
+  port      Int
+  secure    Boolean  @default(false)
+  user      String
+  pass      String
+  from      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

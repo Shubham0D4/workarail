@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
-import { currentStaff, payrollFor } from '@/app/lib/admin-data'
+import { getCrewSession, getCrewLatestPayslip } from '@/app/actions/crew'
 import { CrewPayslips } from '@/app/ui/crew/payslips'
 
 export const metadata: Metadata = { title: 'My payslips' }
 
-export default function CrewPayslipsPage() {
-  const me = currentStaff()
-  const record = payrollFor(me.ref)
+export default async function CrewPayslipsPage() {
+  const me = await getCrewSession()
+
+  const formattedRecord = await getCrewLatestPayslip(me.ref)
 
   return (
     <div className="flex flex-col gap-6">
@@ -19,7 +20,7 @@ export default function CrewPayslipsPage() {
         </p>
       </div>
 
-      <CrewPayslips person={me} record={record} />
+      <CrewPayslips person={me as any} record={formattedRecord as any} />
     </div>
   )
 }

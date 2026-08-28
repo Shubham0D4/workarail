@@ -1,23 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import {
-  ANNUAL_LEAVE_DAYS,
-  attendanceFor,
-  attendanceHours,
-  attendanceWeek,
-  currentStaff,
-  expensesFor,
   formatMoney,
-  leaveFor,
-  leaveTakenBy,
-  payPeriod,
-  payrollFor,
-  staff,
-  today,
   type AttendanceCode,
+  attendanceHours,
 } from '@/app/lib/admin-data'
 import { STAT_ICON, StatCard } from '@/app/ui/admin/stat-card'
 import { StatusPill } from '@/app/ui/crew/status-pill'
+import { getCrewDashboardData } from '@/app/actions/crew'
 
 export const metadata: Metadata = {
   title: 'My dashboard',
@@ -40,22 +30,25 @@ function shortDate(iso: string) {
   return `${Number(d)} ${MON[Number(m) - 1]}`
 }
 
-export default function CrewDashboardPage() {
-  const me = currentStaff()
-  const codes = attendanceFor(me.ref)
+export default async function CrewDashboardPage() {
+  const data = await getCrewDashboardData()
+  const {
+    me,
+    today,
+    attendanceWeek,
+    codes,
+    hours,
+    remaining,
+    openClaimsCount,
+    latestPayPence,
+    payPeriodLabel,
+    myLeaveRequests,
+    myExpenses,
+    staffListForCelebrations,
+  } = data
+
   const todayIndex = attendanceWeek.indexOf(today)
-  const todayCode = codes[todayIndex]
-
-  const hours = codes.reduce((n, c) => n + attendanceHours[c], 0)
-  const taken = leaveTakenBy(me.ref)
-  const remaining = ANNUAL_LEAVE_DAYS - taken
-
-  const myLeave = leaveFor(me.ref)
-  const myExpenses = expensesFor(me.ref)
-  const openClaims = myExpenses.filter(
-    (e) => e.status === 'submitted' || e.status === 'approved'
-  )
-  const pay = payrollFor(me.ref)
+  const todayCode = todayIndex !== -1 ? codes[todayIndex] : '-'
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,11 +78,11 @@ export default function CrewDashboardPage() {
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard label="Hours this week" value={hours} tone="bg-indigo-100 text-indigo-700" icon={<ClockIcon />} />
         <StatCard label="Leave remaining" value={remaining} tone="bg-[#0ca30c]/12 text-[#006300]" icon={<CalendarIcon />} />
-        <StatCard label="Open claims" value={openClaims.length} tone="bg-amber-100 text-amber-800" icon={<ReceiptIcon />} />
+        <StatCard label="Open claims" value={openClaimsCount} tone="bg-amber-100 text-amber-800" icon={<ReceiptIcon />} />
         <MoneyCard
           label="Last net pay"
-          value={pay ? formatMoney(pay.netPence) : '—'}
-          hint={payPeriod.label}
+          value={latestPayPence !== null ? formatMoney(latestPayPence) : '—'}
+          hint={payPeriodLabel}
           tone="bg-zinc-100 text-zinc-700"
           icon={<CardIcon />}
         />
@@ -148,14 +141,14 @@ export default function CrewDashboardPage() {
               </Link>
             </span>
           </div>
-          {myLeave.length === 0 && myExpenses.length === 0 ? (
+          {myLeaveRequests.length === 0 && myExpenses.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-zinc-500">
               You haven&apos;t submitted anything yet.
             </p>
           ) : (
             <ul className="divide-y divide-zinc-100">
               {[
-                ...myLeave.map((r) => ({
+                ...myLeaveRequests.map((r) => ({
                   key: r.id,
                   title: `${r.days} day${r.days === 1 ? '' : 's'} ${r.type} leave`,
                   detail: `${shortDate(r.from)} – ${shortDate(r.to)}`,
@@ -186,14 +179,14 @@ export default function CrewDashboardPage() {
           )}
         </section>
 
-        <TeamCelebrations />
+        <TeamCelebrations staff={staffListForCelebrations} today={today} />
       </div>
     </div>
   )
 }
 
 /** Colleagues with something to mark in the next fortnight. */
-function TeamCelebrations() {
+function TeamCelebrations({ staff, today }: { staff: { name: string; joined: string; birthday: string }[]; today: string }) {
   const days = (from: string, to: string) => {
     const [fy, fm, fd] = from.split('-').map(Number)
     const [ty, tm, td] = to.split('-').map(Number)

@@ -10,7 +10,7 @@ import {
   primaryButtonClass,
 } from '@/app/ui/styles'
 
-export function SignInForm() {
+export function SignInForm({ resetSuccess }: { resetSuccess?: boolean }) {
   const [state, formAction, pending] = useActionState(signIn, initialSignInState)
   const [googleState, googleAction, googlePending] = useActionState(
     signInWithGoogle,
@@ -126,6 +126,11 @@ export function SignInForm() {
   // Step 1: Google, then email.
   return (
     <div className="animate-auth-up flex flex-col gap-5">
+      {resetSuccess ? (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-750 bg-emerald-50/60 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300">
+          Your password has been updated. Please sign in below.
+        </div>
+      ) : null}
       <form action={googleAction}>
         <button
           type="submit"

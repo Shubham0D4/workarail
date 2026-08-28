@@ -13,12 +13,14 @@ import {
   type ExpenseCategory,
   type ExpenseStatus,
   type PaymentMethod,
+  type StaffMember,
 } from '@/app/lib/admin-data'
 import {
   AttachmentPreview,
   type PreviewTarget,
 } from '@/app/ui/admin/attachment-preview'
 import { STAT_ICON, StatCard } from '@/app/ui/admin/stat-card'
+import { decideExpense, addExpense } from '@/app/actions/admin'
 
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -73,18 +75,26 @@ const STATUS_ORDER: ExpenseStatus[] = [
   'rejected',
 ]
 
-const nameFor = (ref: string) => staff.find((p) => p.ref === ref)?.name ?? ref
+export function ExpensesTable({
+  initialExpenses,
+  initialStaff,
+  todayDate,
+}: {
+  initialExpenses?: Expense[]
+  initialStaff?: StaffMember[]
+  todayDate?: string
+}) {
+  const expensesData = initialExpenses || expenses
+  const staffData = initialStaff || staff
+  const activeToday = todayDate || today
 
-export function ExpensesTable() {
-  // TODO: decisions live in component state only — they reset on reload.
-  // Wire approve/reject to a Server Action to persist them.
+  const nameFor = (ref: string) => staffData.find((p) => p.ref === ref)?.name ?? ref
+
   const [decisions, setDecisions] = useState<Record<string, ExpenseStatus>>({})
   const [status, setStatus] = useState<ExpenseStatus | 'all'>('all')
   const [category, setCategory] = useState<ExpenseCategory | 'all'>('all')
   const [query, setQuery] = useState('')
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
-  // TODO: added rows live in component state only — they reset on reload.
-  // Wire this to a Server Action plus real file storage to persist them.
   const [added, setAdded] = useState<Expense[]>([])
   const [adding, setAdding] = useState(false)
   const toast = useToast()
@@ -92,7 +102,7 @@ export function ExpensesTable() {
   // Renders in the topbar rather than this toolbar.
   useRegisterPageAction('Add expense', () => setAdding(true))
 
-  const all = [...added, ...expenses].map((e) => ({
+  const all = [...added, ...expensesData].map((e) => ({
     ...e,
     status: decisions[e.id] ?? e.status,
   }))
@@ -116,7 +126,7 @@ export function ExpensesTable() {
     (e) => e.method !== 'company-card' && (e.status === 'approved' || e.status === 'submitted')
   )
 
-  function decide(id: string, next: ExpenseStatus) {
+  async function decide(id: string, next: ExpenseStatus) {
     setDecisions((prev) => ({ ...prev, [id]: next }))
     const verb =
       next === 'approved'
@@ -125,6 +135,12 @@ export function ExpensesTable() {
           ? 'rejected'
           : 'marked reimbursed'
     toast(`Expense ${id} ${verb}.`, next === 'rejected' ? 'info' : 'success')
+    try {
+      await decideExpense(id, next as 'approved' | 'rejected' | 'reimbursed')
+    } catch (err) {
+      console.error(err)
+      toast('Failed to save status in database.', 'error')
+    }
   }
 
   return (
@@ -337,12 +353,20 @@ export function ExpensesTable() {
       <AddExpenseDialog
         open={adding}
         onClose={() => setAdding(false)}
-        onAdd={(e) => {
+        onAdd={async (e) => {
           setAdded((prev) => [e, ...prev])
           setAdding(false)
           toast(`Expense ${e.id} added for approval.`)
+          try {
+            await addExpense(e)
+          } catch (err) {
+            console.error(err)
+            toast('Failed to save expense in database.', 'error')
+          }
         }}
-        nextId={`EX-${4022 + added.length}`}
+        nextId={`EX-${4022 + all.length}`}
+        staff={staffData}
+        todayDate={activeToday}
       />
 
       <AttachmentPreview target={preview} onClose={() => setPreview(null)} />
@@ -360,12 +384,17 @@ function AddExpenseDialog({
   onClose,
   onAdd,
   nextId,
+  staff,
+  todayDate,
 }: {
   open: boolean
   onClose: () => void
   onAdd: (expense: Expense) => void
   nextId: string
+  staff: StaffMember[]
+  todayDate?: string
 }) {
+  const activeToday = todayDate || today
   const ref = useRef<HTMLDialogElement>(null)
   const [fileName, setFileName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -505,7 +534,7 @@ function AddExpenseDialog({
                 name="date"
                 type="date"
                 required
-                defaultValue={today}
+                defaultValue={activeToday}
                 className={field}
               />
             </label>

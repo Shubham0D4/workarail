@@ -3,7 +3,6 @@
 import { useId, useState } from 'react'
 import {
   formatMoney,
-  type Attachment,
   type Expense,
   type ExpenseCategory,
   type PaymentMethod,
@@ -14,6 +13,7 @@ import {
 } from '@/app/ui/admin/attachment-preview'
 import { StatusPill } from '@/app/ui/crew/status-pill'
 import { useToast } from '@/app/ui/toast'
+import { submitCrewExpense } from '@/app/actions/crew'
 
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -37,6 +37,15 @@ function shortDate(iso: string) {
   return `${Number(d)} ${MON[Number(m) - 1]}`
 }
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 const field =
   'h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40'
 
@@ -49,8 +58,6 @@ export function ExpenseClaims({
   existing: Expense[]
   today: string
 }) {
-  // TODO: state only — wire submit plus real file storage to a Server Action.
-  const [added, setAdded] = useState<Expense[]>([])
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
@@ -58,7 +65,7 @@ export function ExpenseClaims({
   const toast = useToast()
   const id = useId()
 
-  const all = [...added, ...existing]
+  const all = existing
   const owed = all
     .filter(
       (e) =>
@@ -92,7 +99,7 @@ export function ExpenseClaims({
         {open ? (
           <form
             className="border-b border-zinc-200 bg-zinc-50 px-5 py-4"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault()
               const data = new FormData(e.currentTarget)
               const amount = Number(data.get('amount'))
@@ -102,35 +109,40 @@ export function ExpenseClaims({
               }
 
               const file = data.get('receipt')
-              let receipt: Attachment | null = null
+              let receipt: { name: string; kind: 'pdf' | 'image'; size: string; url: string } | null = null
               if (file instanceof File && file.size > 0) {
-                receipt = {
-                  name: file.name,
-                  kind: file.type === 'application/pdf' ? 'pdf' : 'image',
-                  size: `${Math.max(1, Math.round(file.size / 1024))} KB`,
-                  url: URL.createObjectURL(file),
+                try {
+                  const dataUrl = await fileToDataUrl(file)
+                  receipt = {
+                    name: file.name,
+                    kind: file.type === 'application/pdf' ? 'pdf' : 'image',
+                    size: `${Math.max(1, Math.round(file.size / 1024))} KB`,
+                    url: dataUrl,
+                  }
+                } catch (fileErr) {
+                  setError('Failed to process receipt file.')
+                  return
                 }
               }
 
-              setAdded((prev) => [
-                {
-                  id: `EX-${4022 + prev.length}`,
+              try {
+                await submitCrewExpense({
                   date: String(data.get('date')),
-                  category: data.get('category') as ExpenseCategory,
+                  category: data.get('category') as string,
                   merchant: String(data.get('merchant')).trim(),
                   description: String(data.get('description')).trim(),
                   amountPence: Math.round(amount * 100),
-                  staffRef,
-                  method: data.get('method') as PaymentMethod,
-                  status: 'submitted',
+                  method: data.get('method') as string,
                   receipt,
-                },
-                ...prev,
-              ])
-              setError(null)
-              setOpen(false)
-              setFileName(null)
-              toast('Claim submitted for review.')
+                })
+
+                setError(null)
+                setOpen(false)
+                setFileName(null)
+                toast('Claim submitted for review.')
+              } catch (err: any) {
+                setError(err.message || 'Failed to submit expense claim.')
+              }
             }}
           >
             {error ? (

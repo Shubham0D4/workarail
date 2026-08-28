@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { currentStaff } from '@/app/lib/admin-data'
 import { LogoMark } from '@/app/ui/logo-mark'
 
 const NAV = [
@@ -20,9 +19,8 @@ function initials(name: string) {
 
 /** Horizontal menu — the crew portal is a shallow, few-page space, so a top
  *  bar suits it better than the admin's rail. */
-export function CrewTopNav() {
+export function CrewTopNav({ person }: { person: { name: string; role: string } }) {
   const pathname = usePathname()
-  const person = currentStaff()
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/90 backdrop-blur">

@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import {
   attendanceHours,
-  attendanceWeek,
   type AttendanceCode,
 } from '@/app/lib/admin-data'
 import { useToast } from '@/app/ui/toast'
+import { saveCrewTimesheet } from '@/app/actions/crew'
 
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const DOW = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
@@ -39,11 +39,12 @@ function dayDate(iso: string) {
 export function TimesheetForm({
   initial,
   today,
+  weekDays,
 }: {
   initial: AttendanceCode[]
   today: string
+  weekDays: string[]
 }) {
-  // TODO: state only — wire the submit to a Server Action to persist it.
   const [codes, setCodes] = useState<AttendanceCode[]>(initial)
   const [submitted, setSubmitted] = useState(false)
   const toast = useToast()
@@ -80,7 +81,7 @@ export function TimesheetForm({
         </thead>
         <tbody>
           {codes.map((code, i) => {
-            const iso = attendanceWeek[i]
+            const iso = weekDays[i]
             const isToday = iso === today
             return (
               <tr
@@ -165,9 +166,18 @@ export function TimesheetForm({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setSubmitted(true)
-                toast(`Timesheet submitted — ${total}h this week.`)
+              onClick={async () => {
+                try {
+                  const res = await saveCrewTimesheet(codes)
+                  if (res.success) {
+                    setSubmitted(true)
+                    toast(`Timesheet submitted — ${total}h this week.`)
+                  } else {
+                    toast('Failed to save timesheet.', 'error')
+                  }
+                } catch (e) {
+                  toast('Failed to save timesheet.', 'error')
+                }
               }}
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
             >

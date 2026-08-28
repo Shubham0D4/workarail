@@ -9,11 +9,13 @@ import {
   staff,
   type PayrollRecord,
   type PayrollStatus,
+  type StaffMember,
 } from '@/app/lib/admin-data'
 import { useRegisterPageAction } from '@/app/ui/admin/page-action'
 import { useToast } from '@/app/ui/toast'
 import { PayslipDialog, type PayslipTarget } from '@/app/ui/admin/payslip'
 import { STAT_ICON, StatCard } from '@/app/ui/admin/stat-card'
+import { addPayrollAdjustment } from '@/app/actions/admin'
 
 const STATUS: Record<PayrollStatus, { label: string; badge: string; tone: string }> =
   {
@@ -29,14 +31,24 @@ const STATUS: Record<PayrollStatus, { label: string; badge: string; tone: string
     },
   }
 
-const personFor = (ref: string) => staff.find((p) => p.ref === ref)
+export function PayrollTable({
+  initialPayrollRuns,
+  initialStaff,
+  activePayPeriod,
+}: {
+  initialPayrollRuns?: PayrollRecord[]
+  initialStaff?: StaffMember[]
+  activePayPeriod?: { year: number; month: number; label: string }
+}) {
+  const payrollRunsData = initialPayrollRuns || payrollRuns
+  const staffData = initialStaff || staff
+  const period = activePayPeriod || payPeriod
 
-export function PayrollTable() {
+  const personFor = (ref: string) => staffData.find((p) => p.ref === ref)
+
   const [status, setStatus] = useState<PayrollStatus | 'all'>('all')
   const [query, setQuery] = useState('')
   const [slip, setSlip] = useState<PayslipTarget | null>(null)
-  // TODO: adjustments live in component state only — they reset on reload.
-  // Wire this to a Server Action to persist them.
   const [adjustments, setAdjustments] = useState<Adjustment[]>([])
   const [adding, setAdding] = useState(false)
   const toast = useToast()
@@ -45,7 +57,7 @@ export function PayrollTable() {
 
   // Apply adjustments to gross, then recompute the whole deduction stack with
   // the same formula the seeded rows used — never patch net directly.
-  const runs: PayrollRecord[] = payrollRuns.map((base) => {
+  const runs: PayrollRecord[] = payrollRunsData.map((base) => {
     const delta = adjustments
       .filter((a) => a.staffRef === base.staffRef)
       .reduce((n, a) => n + a.amountPence, 0)
@@ -82,7 +94,7 @@ export function PayrollTable() {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <MoneyCard label="Gross pay" pence={gross} hint={`${runs.length} employees`} tone="bg-zinc-100 text-zinc-700" icon={<WalletIcon />} />
         <MoneyCard label="Deductions" pence={deductions} hint="Tax, NI, pension" tone="bg-indigo-100 text-indigo-700" icon={<MinusIcon />} />
-        <MoneyCard label="Net pay" pence={net} hint={payPeriod.label} tone={STATUS.paid.tone} icon={<CheckIcon />} />
+        <MoneyCard label="Net pay" pence={net} hint={period.label} tone={STATUS.paid.tone} icon={<CheckIcon />} />
         <StatCard label="Awaiting run" value={pending} tone={STATUS.pending.tone} icon={<ClockIcon />} />
       </div>
 
@@ -90,7 +102,7 @@ export function PayrollTable() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">
           <div>
             <span className="text-sm font-medium text-zinc-900">
-              {payPeriod.label}
+              {period.label}
             </span>
             <span className="ml-2 text-sm text-zinc-500">
               {rows.length} of {runs.length} employees
@@ -230,13 +242,20 @@ export function PayrollTable() {
       <AddAdjustmentDialog
         open={adding}
         onClose={() => setAdding(false)}
-        onAdd={(a) => {
+        onAdd={async (a) => {
           setAdjustments((prev) => [...prev, a])
           setAdding(false)
           const who =
-            staff.find((p) => p.ref === a.staffRef)?.name ?? a.staffRef
+            staffData.find((p) => p.ref === a.staffRef)?.name ?? a.staffRef
           toast(`${a.label} applied to ${who}. Deductions recalculated.`)
+          try {
+            await addPayrollAdjustment(a.staffRef, a.label, a.amountPence)
+          } catch (err) {
+            console.error(err)
+            toast('Failed to save adjustment in database.', 'error')
+          }
         }}
+        staff={staffData}
       />
 
       <PayslipDialog target={slip} onClose={() => setSlip(null)} />
@@ -256,10 +275,12 @@ function AddAdjustmentDialog({
   open,
   onClose,
   onAdd,
+  staff,
 }: {
   open: boolean
   onClose: () => void
   onAdd: (a: Adjustment) => void
+  staff: StaffMember[]
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   const [error, setError] = useState<string | null>(null)

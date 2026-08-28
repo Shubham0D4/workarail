@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import {
   formatMoney,
-  payPeriod,
   type PayrollRecord,
   type StaffMember,
 } from '@/app/lib/admin-data'
@@ -14,7 +13,7 @@ export function CrewPayslips({
   record,
 }: {
   person: StaffMember
-  record: PayrollRecord | null
+  record: (PayrollRecord & { month: number; year: number }) | null
 }) {
   const [slip, setSlip] = useState<PayslipTarget | null>(null)
 
@@ -37,6 +36,12 @@ export function CrewPayslips({
   const ytdNet = record.netPence * periods
   const ytdDeductions = deductions * periods
 
+  const MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ]
+  const payPeriodLabel = `${MONTHS[record.month - 1]} ${record.year}`
+
   return (
     <>
       <div className="grid grid-cols-3 gap-4">
@@ -50,7 +55,7 @@ export function CrewPayslips({
           <li className="flex flex-wrap items-center gap-4 px-5 py-4">
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-zinc-900">
-                {payPeriod.label}
+                {payPeriodLabel}
               </span>
               <span className="block text-xs text-zinc-500" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {record.reference} ·{' '}

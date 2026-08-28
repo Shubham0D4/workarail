@@ -31,8 +31,15 @@ function topRounded(x: number, y: number, w: number, h: number) {
   return `M${x},${y + h} L${x},${y + r} Q${x},${y} ${x + r},${y} L${x + w - r},${y} Q${x + w},${y} ${x + w},${y + r} L${x + w},${y + h} Z`
 }
 
-export function HoursChart() {
-  const data = weeklyHours()
+export function HoursChart({
+  initialHours,
+  todayDate,
+}: {
+  initialHours?: DayHours[]
+  todayDate?: string
+}) {
+  const data = initialHours || weeklyHours()
+  const activeToday = todayDate || today
   const [active, setActive] = useState<number | null>(null)
   const [showTable, setShowTable] = useState(false)
   const titleId = useId()
@@ -110,7 +117,7 @@ export function HoursChart() {
               const halfY = y(total(d))
               const fullY = y(d.full)
               const dim = active !== null && active !== i
-              const isToday = d.date === today
+              const isToday = d.date === activeToday
 
               return (
                 <g key={d.date} opacity={dim ? 0.45 : 1}>

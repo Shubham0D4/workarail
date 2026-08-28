@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { AttendanceTable } from '@/app/ui/admin/attendance-table'
+import { getTimesheetData } from '@/app/actions/admin'
 
 export const metadata: Metadata = {
   title: 'Timesheets',
@@ -7,6 +8,14 @@ export const metadata: Metadata = {
 }
 
 // The title and primary action live in the topbar (app/ui/admin/topbar.tsx).
-export default function TimesheetsPage() {
-  return <AttendanceTable />
+export default async function TimesheetsPage() {
+  const { staff, attendancePatterns, week, today } = await getTimesheetData()
+  return (
+    <AttendanceTable
+      initialStaff={staff}
+      initialPatterns={attendancePatterns}
+      week={week}
+      todayDate={today}
+    />
+  )
 }

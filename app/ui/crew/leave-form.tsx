@@ -2,12 +2,12 @@
 
 import { useId, useState } from 'react'
 import {
-  ANNUAL_LEAVE_DAYS,
   type LeaveRequest,
   type LeaveType,
 } from '@/app/lib/admin-data'
 import { StatusPill } from '@/app/ui/crew/status-pill'
 import { useToast } from '@/app/ui/toast'
+import { submitCrewLeaveRequest } from '@/app/actions/crew'
 
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const TYPES: LeaveType[] = ['annual', 'sick', 'unpaid', 'parental', 'compassionate']
@@ -44,24 +44,24 @@ export function LeaveForm({
   existing,
   today,
   taken,
+  totalLeaveDays,
 }: {
   staffRef: string
   existing: LeaveRequest[]
   today: string
   taken: number
+  totalLeaveDays: number
 }) {
-  // TODO: state only — wire the submit to a Server Action to persist it.
-  const [added, setAdded] = useState<LeaveRequest[]>([])
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const toast = useToast()
   const id = useId()
 
-  const all = [...added, ...existing]
+  const all = existing
   const pending = all
     .filter((r) => r.status === 'pending')
     .reduce((n, r) => n + r.days, 0)
-  const remaining = ANNUAL_LEAVE_DAYS - taken - pending
+  const remaining = totalLeaveDays - taken - pending
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,7 +87,7 @@ export function LeaveForm({
         {open ? (
           <form
             className="border-b border-zinc-200 bg-zinc-50 px-5 py-4"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault()
               const data = new FormData(e.currentTarget)
               const from = String(data.get('from'))
@@ -111,23 +111,20 @@ export function LeaveForm({
                 return
               }
 
-              setAdded((prev) => [
-                {
-                  id: `LV-${1053 + prev.length}`,
-                  staffRef,
+              try {
+                await submitCrewLeaveRequest({
                   type,
                   from,
                   to,
                   days,
                   reason,
-                  status: 'pending',
-                  submitted: today,
-                },
-                ...prev,
-              ])
-              setError(null)
-              setOpen(false)
-              toast(`Request submitted for ${days} day${days === 1 ? '' : 's'}.`)
+                })
+                setError(null)
+                setOpen(false)
+                toast(`Request submitted for ${days} day${days === 1 ? '' : 's'}.`)
+              } catch (err: any) {
+                setError(err.message || 'Failed to submit request.')
+              }
             }}
           >
             {error ? (
