@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation'
 import { type ComponentType } from 'react'
 import { expenses, leaveRequests } from '@/app/lib/admin-data'
 import { LogoMark } from '@/app/ui/logo-mark'
+import { signOut } from '@/app/actions/auth'
+
 
 export type NavItem = {
   href: string
@@ -138,27 +140,54 @@ function NavLinks({
   )
 }
 
-function AccountBlock() {
+function AccountBlock({
+  user,
+}: {
+  user?: {
+    name?: string | null
+    email: string
+    avatarUrl?: string | null
+  }
+}) {
+  const name = user?.name || 'Admin'
+  const email = user?.email || 'admin@workarail.com'
+  const initials = name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'AD'
+
   return (
     <div className="flex items-center gap-3 px-1">
-      <span
-        aria-hidden="true"
-        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-semibold text-white"
-      >
-        AD
-      </span>
+      {user?.avatarUrl ? (
+        <img
+          src={user.avatarUrl}
+          alt={name}
+          className="size-8 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-semibold text-white"
+        >
+          {initials}
+        </span>
+      )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white">Admin</p>
-        <p className="truncate text-xs text-indigo-200">admin@workarail.com</p>
+        <p className="truncate text-sm font-medium text-white">{name}</p>
+        <p className="truncate text-xs text-indigo-200">{email}</p>
       </div>
-      <Link
-        href="/signin"
-        aria-label="Sign out"
-        title="Sign out"
-        className={`shrink-0 rounded-md p-1.5 text-indigo-200 transition hover:bg-white/10 hover:text-white ${FOCUS}`}
-      >
-        <SignOutIcon />
-      </Link>
+      <form action={signOut}>
+        <button
+          type="submit"
+          aria-label="Sign out"
+          title="Sign out"
+          className={`shrink-0 rounded-md p-1.5 text-indigo-200 transition hover:bg-white/10 hover:text-white ${FOCUS}`}
+        >
+          <SignOutIcon />
+        </button>
+      </form>
     </div>
   )
 }
@@ -171,10 +200,16 @@ function SidebarPanel({
   groups,
   subtitle,
   home,
+  user,
 }: {
   groups: NavGroup[]
   subtitle: string
   home: string
+  user?: {
+    name?: string | null
+    email: string
+    avatarUrl?: string | null
+  }
 }) {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-indigo-950">
@@ -189,7 +224,7 @@ function SidebarPanel({
         </div>
 
         <div className="shrink-0 border-t border-white/10 px-3 py-3">
-          <AccountBlock />
+          <AccountBlock user={user} />
         </div>
       </div>
     </div>
@@ -198,16 +233,63 @@ function SidebarPanel({
 
 /** Desktop rail. */
 export function AdminSidebar({
-  groups = ADMIN_NAV,
+  groups,
   subtitle = 'Operations admin',
   home = '/admin/dashboard',
+  user,
+  pendingLeaves,
+  pendingExpenses,
 }: {
   groups?: NavGroup[]
   subtitle?: string
   home?: string
+  user?: {
+    name?: string | null
+    email: string
+    avatarUrl?: string | null
+  }
+  pendingLeaves?: number
+  pendingExpenses?: number
 }) {
-  return <SidebarPanel groups={groups} subtitle={subtitle} home={home} />
+  const dynamicGroups: NavGroup[] = groups || [
+    {
+      label: 'Operations',
+      items: [
+        { href: '/admin/dashboard', label: 'Dashboard', icon: GridIcon },
+        { href: '/admin/crews', label: 'Crews', icon: UsersIcon },
+        { href: '/admin/timesheets', label: 'Timesheets', icon: ClockIcon },
+        {
+          href: '/admin/leaves',
+          label: 'Leaves',
+          icon: CalendarIcon,
+          badge: pendingLeaves !== undefined ? (pendingLeaves > 0 ? pendingLeaves : undefined) : (leaveRequests.filter((r) => r.status === 'pending').length || undefined),
+        },
+        { href: '/admin/celebrations', label: 'Celebrations', icon: CakeIcon },
+      ],
+    },
+    {
+      label: 'Finance',
+      items: [
+        { href: '/admin/invoices', label: 'Invoices', icon: InvoiceIcon },
+        {
+          href: '/admin/expenses',
+          label: 'Expenses',
+          icon: ReceiptIcon,
+          badge: pendingExpenses !== undefined ? (pendingExpenses > 0 ? pendingExpenses : undefined) : (expenses.filter((e) => e.status === 'submitted').length || undefined),
+        },
+        { href: '/admin/payroll', label: 'Payroll', icon: CardIcon },
+        { href: '/admin/analytics', label: 'Analytics', icon: ChartIcon },
+      ],
+    },
+    {
+      label: 'Account',
+      items: [{ href: '/admin/settings', label: 'Settings', icon: CogIcon }],
+    },
+  ];
+
+  return <SidebarPanel groups={dynamicGroups} subtitle={subtitle} home={home} user={user} />
 }
+
 
 /* --- icons --- */
 

@@ -1,12 +1,14 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import {
   staff,
   today,
   type StaffMember,
   type StaffStatus,
 } from '@/app/lib/admin-data'
+import { useRegisterPageAction } from '@/app/ui/admin/page-action'
+import { getCrews, addCrew, addStaffMember } from '@/app/actions/admin'
 
 const PAGE_SIZE = 10
 
@@ -76,7 +78,14 @@ type ColumnKey = (typeof COLUMNS)[number]['key']
 const pagerButtonClass =
   'rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900'
 
-export function CrewsTable() {
+export function CrewsTable({
+  initialStaff,
+  todayDate,
+}: {
+  initialStaff?: StaffMember[]
+  todayDate?: string
+}) {
+  const activeToday = todayDate || today
   const [page, setPage] = useState(0)
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StaffStatus | 'all'>('all')
@@ -84,20 +93,34 @@ export function CrewsTable() {
   const [hidden, setHidden] = useState<ReadonlySet<ColumnKey>>(new Set())
   const [openRow, setOpenRow] = useState<string | null>(null)
 
+  const [crews, setCrews] = useState<Array<{ id: string; name: string }>>([])
+  const [addingStaff, setAddingStaff] = useState(false)
+  const [addingCrew, setAddingCrew] = useState(false)
+
+  useEffect(() => {
+    if (addingStaff) {
+      getCrews().then(setCrews)
+    }
+  }, [addingStaff])
+
+  useRegisterPageAction('Add staff member', () => setAddingStaff(true))
+
   const visible = COLUMNS.filter((c) => !hidden.has(c.key))
+
+  const staffData = initialStaff || staff
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     const days = DATE_RANGES.find((r) => r.value === range)?.days ?? null
-    return staff.filter((p) => {
+    return staffData.filter((p) => {
       if (status !== 'all' && p.status !== status) return false
-      if (days !== null && daysBetween(p.joined, today) > days) return false
+      if (days !== null && daysBetween(p.joined, activeToday) > days) return false
       if (!q) return true
       return [p.name, p.email, p.ref, p.role, p.phone].some((field) =>
         field.toLowerCase().includes(q)
       )
     })
-  }, [query, status, range])
+  }, [staffData, query, status, range, activeToday])
 
   const isFiltered = query.trim() !== '' || status !== 'all' || range !== 'all'
 
@@ -216,6 +239,15 @@ export function CrewsTable() {
               Clear
             </button>
           ) : null}
+
+          <button
+            type="button"
+            onClick={() => setAddingCrew(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            <PlusIcon />
+            Add Crew
+          </button>
         </div>
 
         <div className="relative">
@@ -351,6 +383,245 @@ export function CrewsTable() {
           </button>
         </div>
       </div>
+
+      {addingCrew && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Add Crew</h3>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const form = e.currentTarget
+                const formData = new FormData(form)
+                const name = formData.get('name') as string
+                if (!name) return
+                try {
+                  await addCrew(name)
+                  setAddingCrew(false)
+                } catch (err) {
+                  alert(String(err))
+                }
+              }}
+              className="mt-4 flex flex-col gap-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Crew Name
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  placeholder="e.g. Track Team A"
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                />
+              </div>
+              <div className="flex justify-end gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setAddingCrew(false)}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {addingStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="my-8 w-full max-w-lg rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Add Staff Member</h3>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const form = e.currentTarget
+                const formData = new FormData(form)
+                const ref = formData.get('ref') as string
+                const name = formData.get('name') as string
+                const email = formData.get('email') as string
+                const phone = formData.get('phone') as string
+                const role = formData.get('role') as string
+                const crewId = formData.get('crewId') as string
+                const status = formData.get('status') as string
+                const joined = formData.get('joined') as string
+                const birthday = formData.get('birthday') as string
+
+                try {
+                  await addStaffMember({
+                    ref,
+                    name,
+                    email,
+                    phone,
+                    role,
+                    crewId,
+                    status,
+                    joined,
+                    birthday,
+                  })
+                  setAddingStaff(false)
+                } catch (err) {
+                  alert(String(err))
+                }
+              }}
+              className="mt-4 flex flex-col gap-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Employee ID
+                  </label>
+                  <input
+                    type="text"
+                    name="ref"
+                    required
+                    placeholder="e.g. EMP-015"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    required
+                    placeholder="e.g. Jane Doe"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    placeholder="e.g. jane@workarail.com"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    required
+                    placeholder="e.g. +44 7700 900077"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Role
+                  </label>
+                  <input
+                    type="text"
+                    name="role"
+                    required
+                    placeholder="e.g. Track Technician"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Crew Assignment
+                  </label>
+                  <select
+                    name="crewId"
+                    required
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+                  >
+                    <option value="">Select a crew...</option>
+                    {crews.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Status
+                  </label>
+                  <select
+                    name="status"
+                    required
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+                  >
+                    <option value="available">Available</option>
+                    <option value="on-site">On site</option>
+                    <option value="off-shift">Off shift</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Date Joined
+                  </label>
+                  <input
+                    type="date"
+                    name="joined"
+                    required
+                    defaultValue={new Date().toISOString().split('T')[0]}
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Birthday (MM-DD)
+                  </label>
+                  <input
+                    type="text"
+                    name="birthday"
+                    required
+                    placeholder="e.g. 10-24"
+                    pattern="^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+                    title="Please use MM-DD format"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setAddingStaff(false)}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -587,6 +858,14 @@ function SearchIcon() {
     <svg {...ICON}>
       <circle cx="11" cy="11" r="6.5" />
       <path d="m16 16 4.5 4.5" />
+    </svg>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg {...ICON}>
+      <path d="M12 5v14M5 12h14" />
     </svg>
   )
 }

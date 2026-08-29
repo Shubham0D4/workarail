@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { PublicHolidays } from '@/app/ui/admin/public-holidays'
 import { SettingsForm } from '@/app/ui/admin/settings-form'
+import { getSettings } from '@/app/actions/admin'
 
 export const metadata: Metadata = {
   title: 'Settings',
@@ -20,8 +21,11 @@ export default async function SettingsPage({
   const region = one(params.region) || null
   const year = Number(one(params.year)) || 2026
 
+  const settings = await getSettings()
+
   return (
     <SettingsForm
+      initialSettings={settings}
       holidays={
         <PublicHolidays country={country} region={region} year={year} />
       }

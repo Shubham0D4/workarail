@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { STAT_ICON, StatCard } from '@/app/ui/admin/stat-card'
+import { useRegisterPageAction } from '@/app/ui/admin/page-action'
+import { addAttendanceEntry } from '@/app/actions/admin'
 import {
   attendanceFor,
   attendanceHours,
@@ -10,9 +12,9 @@ import {
   today,
   weekHours,
   type AttendanceCode,
+  type StaffMember,
 } from '@/app/lib/admin-data'
 
-/** Letter + colour, so the code never rides on colour alone. */
 const CODES: Record<
   AttendanceCode,
   { label: string; cell: string; dot: string; tile: string }
@@ -57,16 +59,43 @@ function dayLabel(iso: string, index: number) {
   return { dow: DOW[index], day: iso.split('-')[2] }
 }
 
-export function AttendanceTable() {
+export function AttendanceTable({
+  initialStaff,
+  initialPatterns,
+  week,
+  todayDate,
+}: {
+  initialStaff?: StaffMember[]
+  initialPatterns?: Record<string, string>
+  week?: string[]
+  todayDate?: string
+}) {
+  const staffData = initialStaff || staff
+  const patterns = initialPatterns || {}
+  const activeWeek = week || attendanceWeek
+  const activeToday = todayDate || today
+
+  const [adding, setAdding] = useState(false)
+  useRegisterPageAction('Add entry', () => setAdding(true))
+
+  const getAttendanceFor = (ref: string) => {
+    const pattern = patterns[ref] ?? '-------'
+    return pattern.split('') as AttendanceCode[]
+  }
+
+  const getWeekHours = (ref: string) => {
+    return getAttendanceFor(ref).reduce((n, c) => n + attendanceHours[c], 0)
+  }
+
   const [query, setQuery] = useState('')
   const [code, setCode] = useState<AttendanceCode | 'all'>('all')
 
-  const todayIndex = attendanceWeek.indexOf(today)
+  const todayIndex = activeWeek.indexOf(activeToday)
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return staff
-      .map((person) => ({ person, days: attendanceFor(person.ref) }))
+    return staffData
+      .map((person) => ({ person, days: getAttendanceFor(person.ref) }))
       .filter(({ person, days }) => {
         if (code !== 'all' && !days.includes(code)) return false
         if (!q) return true
@@ -74,20 +103,20 @@ export function AttendanceTable() {
           f.toLowerCase().includes(q)
         )
       })
-  }, [query, code])
+  }, [staffData, query, code])
 
   // Counts for the day everyone is actually looking at.
   const todayCounts = useMemo(() => {
     const counts: Partial<Record<AttendanceCode, number>> = {}
     if (todayIndex < 0) return counts
-    for (const person of staff) {
-      const c = attendanceFor(person.ref)[todayIndex]
+    for (const person of staffData) {
+      const c = getAttendanceFor(person.ref)[todayIndex]
       counts[c] = (counts[c] ?? 0) + 1
     }
     return counts
-  }, [todayIndex])
+  }, [staffData, todayIndex])
 
-  const totalHours = rows.reduce((n, r) => n + weekHours(r.person.ref), 0)
+  const totalHours = rows.reduce((n, r) => n + getWeekHours(r.person.ref), 0)
 
   return (
     <div className="flex flex-col gap-6">
@@ -122,10 +151,10 @@ export function AttendanceTable() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-              {formatRange()}
+              {formatRange(activeWeek)}
             </span>
             <span className="text-sm text-zinc-500 dark:text-zinc-400">
-              · {rows.length} of {staff.length} people
+              · {rows.length} of {staffData.length} people
             </span>
           </div>
 
@@ -173,9 +202,9 @@ export function AttendanceTable() {
                 <th scope="col" className="px-5 py-3 font-medium">
                   Employee
                 </th>
-                {attendanceWeek.map((iso, i) => {
+                {activeWeek.map((iso, i) => {
                   const { dow, day } = dayLabel(iso, i)
-                  const isToday = iso === today
+                  const isToday = iso === activeToday
                   return (
                     <th
                       key={iso}
@@ -208,7 +237,7 @@ export function AttendanceTable() {
               {rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={attendanceWeek.length + 2}
+                    colSpan={activeWeek.length + 2}
                     className="px-5 py-16 text-center"
                   >
                     <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
@@ -238,7 +267,7 @@ export function AttendanceTable() {
                     </th>
 
                     {days.map((c, i) => (
-                      <td key={attendanceWeek[i]} className="px-2 py-2.5">
+                      <td key={activeWeek[i]} className="px-2 py-2.5">
                         <span
                           title={`${CODES[c].label} · ${attendanceHours[c]}h`}
                           className={`mx-auto flex size-8 items-center justify-center rounded-md text-xs font-semibold ${CODES[c].cell}`}
@@ -253,7 +282,7 @@ export function AttendanceTable() {
                       className="px-5 py-2.5 text-right font-medium text-zinc-900 dark:text-zinc-100"
                       style={{ fontVariantNumeric: 'tabular-nums' }}
                     >
-                      {weekHours(person.ref)}h
+                      {getWeekHours(person.ref)}h
                     </td>
                   </tr>
                 ))
@@ -287,14 +316,104 @@ export function AttendanceTable() {
             {totalHours}h total
           </p>
         </div>
+
+        {adding && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Add Attendance Entry</h3>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  const form = e.currentTarget
+                  const formData = new FormData(form)
+                  const staffRef = formData.get('staffRef') as string
+                  const date = formData.get('date') as string
+                  const code = formData.get('code') as string
+
+                  try {
+                    await addAttendanceEntry({ staffRef, date, code })
+                    setAdding(false)
+                  } catch (err) {
+                    alert(String(err))
+                  }
+                }}
+                className="mt-4 flex flex-col gap-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Staff Member
+                  </label>
+                  <select
+                    name="staffRef"
+                    required
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+                  >
+                    <option value="">Select an employee...</option>
+                    {staffData.map((p) => (
+                      <option key={p.ref} value={p.ref}>
+                        {p.name} ({p.ref})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    name="date"
+                    required
+                    defaultValue={activeToday}
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Attendance Status
+                  </label>
+                  <select
+                    name="code"
+                    required
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+                  >
+                    <option value="P">Present (P)</option>
+                    <option value="H">Half day (H)</option>
+                    <option value="L">Leave (L)</option>
+                    <option value="A">Absent (A)</option>
+                    <option value="-">Non-working (-)</option>
+                  </select>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdding(false)}
+                    className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                  >
+                    Save
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   )
 }
 
-function formatRange() {
-  const [y, m, d] = attendanceWeek[0].split('-')
-  const [, m2, d2] = attendanceWeek[6].split('-')
+function formatRange(week: string[]) {
+  const [y, m, d] = week[0].split('-')
+  const [, m2, d2] = week[6].split('-')
   const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const from = `${Number(d)} ${MON[Number(m) - 1]}`
   const to = `${Number(d2)} ${MON[Number(m2) - 1]} ${y}`

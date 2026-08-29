@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { staff, today, type StaffMember } from '@/app/lib/admin-data'
 import { STAT_ICON, StatCard } from '@/app/ui/admin/stat-card'
 import { useToast } from '@/app/ui/toast'
+import { updateStaffDates } from '@/app/actions/admin'
 
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -62,30 +63,29 @@ export type EditablePerson = Omit<StaffMember, 'birthday' | 'joined'> & {
 }
 
 /** Every upcoming birthday and work anniversary, soonest first. */
-function buildCelebrations(people: EditablePerson[]): Celebration[] {
+function buildCelebrations(people: EditablePerson[], todayStr: string): Celebration[] {
   const out: Celebration[] = []
   for (const person of people) {
     if (person.birthday) {
-      const bday = nextOccurrence(person.birthday, today)
+      const bday = nextOccurrence(person.birthday, todayStr)
       out.push({
         person,
         kind: 'birthday',
         date: bday,
-        daysAway: daysBetween(today, bday),
+        daysAway: daysBetween(todayStr, bday),
       })
     }
 
     if (!person.joined) continue
     const joinedMd = person.joined.slice(5)
-    const anniv = nextOccurrence(joinedMd, today)
+    const anniv = nextOccurrence(joinedMd, todayStr)
     const years = Number(anniv.slice(0, 4)) - Number(person.joined.slice(0, 4))
-    // Someone who joined this year has no anniversary to mark yet.
     if (years > 0) {
       out.push({
         person,
         kind: 'anniversary',
         date: anniv,
-        daysAway: daysBetween(today, anniv),
+        daysAway: daysBetween(todayStr, anniv),
         years,
       })
     }
@@ -108,16 +108,22 @@ const KIND = {
 
 type Override = { birthday?: string | null; joined?: string | null }
 
-export function Celebrations() {
+export function Celebrations({
+  initialStaff,
+  todayDate,
+}: {
+  initialStaff?: StaffMember[]
+  todayDate?: string
+}) {
+  const staffData = initialStaff || staff
+  const activeToday = todayDate || today
   const [kind, setKind] = useState<Kind | 'all'>('all')
   const [query, setQuery] = useState('')
-  // TODO: edits live in component state only — they reset on reload.
-  // Wire these to a Server Action to persist them.
   const [overrides, setOverrides] = useState<Record<string, Override>>({})
   const [editing, setEditing] = useState<string | null>(null)
   const toast = useToast()
 
-  const people: EditablePerson[] = staff.map((p) => {
+  const people: EditablePerson[] = staffData.map((p) => {
     const o = overrides[p.ref]
     return {
       ...p,
@@ -126,24 +132,41 @@ export function Celebrations() {
     }
   })
 
-  const ALL = buildCelebrations(people)
+  const ALL = buildCelebrations(people, activeToday)
 
-  function save(ref: string, next: Override) {
+  async function save(ref: string, next: Override) {
     setOverrides((prev) => ({ ...prev, [ref]: { ...prev[ref], ...next } }))
     setEditing(null)
-    toast(`Dates updated for ${staff.find((p) => p.ref === ref)?.name ?? ref}.`)
+    const personName = staffData.find((p) => p.ref === ref)?.name ?? ref
+    toast(`Dates updated for ${personName}.`)
+    try {
+      const orig = staffData.find((p) => p.ref === ref)
+      const bday = next.birthday !== undefined ? next.birthday : (orig?.birthday || null)
+      const joined = next.joined !== undefined ? next.joined : (orig?.joined || null)
+      await updateStaffDates(ref, bday, joined)
+    } catch (err) {
+      console.error(err)
+      toast('Failed to save dates in database.', 'error')
+    }
   }
 
-  function clearDates(ref: string) {
+  async function clearDates(ref: string) {
     setOverrides((prev) => ({ ...prev, [ref]: { birthday: null, joined: null } }))
     setEditing(null)
+    const personName = staffData.find((p) => p.ref === ref)?.name ?? ref
     toast(
-      `Dates cleared for ${staff.find((p) => p.ref === ref)?.name ?? ref}.`,
+      `Dates cleared for ${personName}.`,
       'info'
     )
+    try {
+      await updateStaffDates(ref, null, null)
+    } catch (err) {
+      console.error(err)
+      toast('Failed to clear dates in database.', 'error')
+    }
   }
 
-  const thisMonth = today.slice(0, 7)
+  const thisMonth = activeToday.slice(0, 7)
 
   const todays = ALL.filter((c) => c.daysAway === 0)
   // A filter over ~28 rows; the React Compiler memoises this on its own.

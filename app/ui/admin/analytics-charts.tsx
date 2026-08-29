@@ -2,10 +2,10 @@
 
 import { useState } from 'react'
 import {
-  expenses,
   formatMoney,
-  invoices,
   type MonthPoint,
+  type Expense,
+  type Invoice,
 } from '@/app/lib/admin-data'
 
 /** Assign in order, never cycled — the ordering is what keeps them separable. */
@@ -147,9 +147,10 @@ const LABELS: Record<string, string> = {
   other: 'Other',
 }
 
-export function CategorySpend() {
+export function CategorySpend({ initialExpenses }: { initialExpenses: Expense[] }) {
+  const expensesData = initialExpenses
   const totals = Object.entries(
-    expenses
+    expensesData
       .filter((e) => e.status !== 'rejected')
       .reduce<Record<string, number>>((acc, e) => {
         acc[e.category] = (acc[e.category] ?? 0) + e.amountPence
@@ -157,7 +158,7 @@ export function CategorySpend() {
       }, {})
   ).sort((a, b) => b[1] - a[1])
 
-  const total = totals.reduce((n, [, v]) => n + v, 0)
+  const total = totals.reduce((n, [, v]) => n + v, 0) || 1
 
   return (
     <section className="viz rounded-xl border border-zinc-200 bg-white p-5">
@@ -204,9 +205,10 @@ const RECEIVABLE = [
   { key: 'overdue', label: 'Overdue', colour: '#d03b3b' },
 ] as const
 
-export function Receivables() {
+export function Receivables({ initialInvoices }: { initialInvoices: Invoice[] }) {
+  const invoicesData = initialInvoices
   const rows = RECEIVABLE.map((r) => {
-    const matching = invoices.filter((i) => i.status === r.key)
+    const matching = invoicesData.filter((i) => i.status === r.key)
     return {
       ...r,
       count: matching.length,

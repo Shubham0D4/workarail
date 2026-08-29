@@ -114,8 +114,29 @@ export const FINANCE_ACTIONS: Record<string, string> = {
  * Client wrappers so the nav config never crosses the server/client boundary:
  * it holds icon components, and functions can't be serialised as props.
  */
-export function FinanceSidebar() {
-  return <AdminSidebar groups={FINANCE_NAV} subtitle="Operations finance" home="/finance" />
+export function FinanceSidebar({
+  user,
+  pendingLeaves,
+  pendingExpenses,
+}: {
+  user?: {
+    name?: string | null
+    email: string
+    avatarUrl?: string | null
+  }
+  pendingLeaves?: number
+  pendingExpenses?: number
+}) {
+  return (
+    <AdminSidebar
+      groups={FINANCE_NAV}
+      subtitle="Operations finance"
+      home="/finance"
+      user={user}
+      pendingLeaves={pendingLeaves}
+      pendingExpenses={pendingExpenses}
+    />
+  )
 }
 
 export function FinanceTopbar() {

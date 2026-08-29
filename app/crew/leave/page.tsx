@@ -1,32 +1,28 @@
 import type { Metadata } from 'next'
-import {
-  ANNUAL_LEAVE_DAYS,
-  currentStaff,
-  leaveFor,
-  leaveTakenBy,
-  today,
-} from '@/app/lib/admin-data'
+import { getCrewDashboardData } from '@/app/actions/crew'
 import { LeaveForm } from '@/app/ui/crew/leave-form'
 
 export const metadata: Metadata = { title: 'My leave' }
 
-export default function CrewLeavePage() {
-  const me = currentStaff()
+export default async function CrewLeavePage() {
+  const data = await getCrewDashboardData()
+  const { me, myLeaveRequests, today, taken, totalLeaveDays } = data
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-zinc-900">My leave</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          {ANNUAL_LEAVE_DAYS} days a year, excluding public holidays.
+          {totalLeaveDays} days a year, excluding public holidays.
         </p>
       </div>
 
       <LeaveForm
         staffRef={me.ref}
-        existing={leaveFor(me.ref)}
+        existing={myLeaveRequests}
         today={today}
-        taken={leaveTakenBy(me.ref)}
+        taken={taken}
+        totalLeaveDays={totalLeaveDays}
       />
     </div>
   )

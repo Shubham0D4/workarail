@@ -1,0 +1,22 @@
+{
+  "company": "Work à Rail",
+  "email": "admin@workarail.com",
+  "timezone": "Europe/London",
+  "currency": "GBP (£)",
+  "payday": "Last working day",
+  "allowance": "1047.50",
+  "tax": 20,
+  "ni": 8,
+  "pension": 5,
+  "leaveDays": 28,
+  "carryOver": 5,
+  "workingDays": "Monday to Friday",
+  "standardDay": 8,
+  "notifyLeave": true,
+  "notifyExpenses": true,
+  "notifyPayroll": true,
+  "notifyCelebrations": false,
+  "sessionTimeout": "8 hours",
+  "twoFactor": true,
+  "auditLog": true
+}

@@ -7,9 +7,13 @@ import {
   today,
   type LeaveStatus,
   type LeaveType,
+  type StaffMember,
+  type LeaveRequest,
 } from '@/app/lib/admin-data'
 import { STAT_ICON, StatCard } from '@/app/ui/admin/stat-card'
 import { useToast } from '@/app/ui/toast'
+import { useRegisterPageAction } from '@/app/ui/admin/page-action'
+import { decideLeaveRequest, addLeaveRequest } from '@/app/actions/admin'
 
 const STATUS: Record<LeaveStatus, { label: string; badge: string; tone: string }> =
   {
@@ -50,11 +54,6 @@ function range(from: string, to: string) {
   return from === to ? shortDate(from) : `${shortDate(from)} – ${shortDate(to)}`
 }
 
-const nameFor = (ref: string) =>
-  staff.find((p) => p.ref === ref)?.name ?? ref
-const roleFor = (ref: string) =>
-  staff.find((p) => p.ref === ref)?.role ?? ''
-
 function initials(name: string) {
   const parts = name.trim().split(/\s+/)
   return (
@@ -62,17 +61,35 @@ function initials(name: string) {
   ).toUpperCase()
 }
 
-export function LeaveRequests() {
-  // TODO: decisions live in component state only — they reset on reload.
-  // Wire approve/reject to a Server Action to persist them.
+export function LeaveRequests({
+  initialLeaves,
+  initialStaff,
+  todayDate,
+}: {
+  initialLeaves?: LeaveRequest[]
+  initialStaff?: StaffMember[]
+  todayDate?: string
+}) {
+  const leavesData = initialLeaves || leaveRequests
+  const staffData = initialStaff || staff
+  const activeToday = todayDate || today
+
+  const nameFor = (ref: string) =>
+    staffData.find((p) => p.ref === ref)?.name ?? ref
+  const roleFor = (ref: string) =>
+    staffData.find((p) => p.ref === ref)?.role ?? ''
+
   const [decisions, setDecisions] = useState<Record<string, LeaveStatus>>({})
   const [status, setStatus] = useState<LeaveStatus | 'all'>('all')
   const [query, setQuery] = useState('')
   const toast = useToast()
 
+  const [adding, setAdding] = useState(false)
+  useRegisterPageAction('New request', () => setAdding(true))
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return leaveRequests
+    return leavesData
       .map((r) => ({ ...r, status: decisions[r.id] ?? r.status }))
       .filter((r) => {
         if (status !== 'all' && r.status !== status) return false
@@ -81,21 +98,27 @@ export function LeaveRequests() {
           f.toLowerCase().includes(q)
         )
       })
-  }, [decisions, status, query])
+  }, [leavesData, decisions, status, query])
 
-  const all = leaveRequests.map((r) => ({
+  const all = leavesData.map((r) => ({
     ...r,
     status: decisions[r.id] ?? r.status,
   }))
   const count = (s: LeaveStatus) => all.filter((r) => r.status === s).length
   const awayToday = all.filter(
-    (r) => r.status === 'approved' && r.from <= today && r.to >= today
+    (r) => r.status === 'approved' && r.from <= activeToday && r.to >= activeToday
   ).length
 
-  function decide(id: string, next: LeaveStatus) {
+  async function decide(id: string, next: 'approved' | 'rejected') {
     setDecisions((prev) => ({ ...prev, [id]: next }))
-    const who = nameFor(leaveRequests.find((r) => r.id === id)?.staffRef ?? '')
+    const who = nameFor(leavesData.find((r) => r.id === id)?.staffRef ?? '')
     toast(`${who}'s request ${next}.`, next === 'rejected' ? 'info' : 'success')
+    try {
+      await decideLeaveRequest(id, next)
+    } catch (err) {
+      console.error(err)
+      toast('Failed to save decision in database.', 'error')
+    }
   }
 
   return (
@@ -279,6 +302,140 @@ export function LeaveRequests() {
             </tbody>
           </table>
         </div>
+
+        {adding && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">New Leave Request</h3>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  const form = e.currentTarget
+                  const formData = new FormData(form)
+                  const staffRef = formData.get('staffRef') as string
+                  const type = formData.get('type') as string
+                  const from = formData.get('from') as string
+                  const to = formData.get('to') as string
+                  const days = parseInt(formData.get('days') as string, 10)
+                  const reason = formData.get('reason') as string
+
+                  try {
+                    await addLeaveRequest({ staffRef, type, from, to, days, reason })
+                    setAdding(false)
+                    toast('Leave request submitted successfully', 'success')
+                  } catch (err) {
+                    alert(String(err))
+                  }
+                }}
+                className="mt-4 flex flex-col gap-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Staff Member
+                  </label>
+                  <select
+                    name="staffRef"
+                    required
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+                  >
+                    <option value="">Select an employee...</option>
+                    {staffData.map((p) => (
+                      <option key={p.ref} value={p.ref}>
+                        {p.name} ({p.ref})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Leave Type
+                  </label>
+                  <select
+                    name="type"
+                    required
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+                  >
+                    <option value="annual">Annual leave</option>
+                    <option value="sick">Sick leave</option>
+                    <option value="unpaid">Unpaid leave</option>
+                    <option value="parental">Parental leave</option>
+                    <option value="compassionate">Compassionate leave</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      From Date
+                    </label>
+                    <input
+                      type="date"
+                      name="from"
+                      required
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      To Date
+                    </label>
+                    <input
+                      type="date"
+                      name="to"
+                      required
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Working Days
+                    </label>
+                    <input
+                      type="number"
+                      name="days"
+                      required
+                      min="1"
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Reason / Description
+                  </label>
+                  <textarea
+                    name="reason"
+                    required
+                    rows={2}
+                    placeholder="e.g. Family holiday"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdding(false)}
+                    className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                  >
+                    Submit
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   )

@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
-import { currentStaff, expensesFor, today } from '@/app/lib/admin-data'
+import { getCrewDashboardData } from '@/app/actions/crew'
 import { ExpenseClaims } from '@/app/ui/crew/expense-claims'
 
 export const metadata: Metadata = { title: 'My expenses' }
 
-export default function CrewExpensesPage() {
-  const me = currentStaff()
+export default async function CrewExpensesPage() {
+  const data = await getCrewDashboardData()
+  const { me, myExpenses, today } = data
 
   return (
     <div className="flex flex-col gap-6">
@@ -18,7 +19,7 @@ export default function CrewExpensesPage() {
         </p>
       </div>
 
-      <ExpenseClaims staffRef={me.ref} existing={expensesFor(me.ref)} today={today} />
+      <ExpenseClaims staffRef={me.ref} existing={myExpenses} today={today} />
     </div>
   )
 }

@@ -1,34 +1,48 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import {
-  attendanceFor,
   attendanceHours,
-  attendanceWeek,
-  expenses,
   formatMoney,
-  invoices,
-  leaveRequests,
-  monthlyFinance,
-  payPeriod,
-  payrollRuns,
-  staff,
-  today,
+  type AttendanceCode,
 } from '@/app/lib/admin-data'
 import { STAT_ICON } from '@/app/ui/admin/stat-card'
+import {
+  getInvoices,
+  getExpenses,
+  getPayrollRecords,
+  getStaff,
+  getLeaveRequests,
+  getRequestPayPeriod,
+  getMonthlyFinance,
+  getTimesheetData,
+} from '@/app/actions/admin'
 
 export const metadata: Metadata = {
   title: 'Finance dashboard',
   description: 'Cash position, payroll cost and the people data behind it.',
 }
 
+export const dynamic = 'force-dynamic'
+
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 function shortDate(iso: string) {
+  if (!iso) return ''
   const [, m, d] = iso.split('-')
   return `${Number(d)} ${MON[Number(m) - 1]}`
 }
-const nameFor = (ref: string) => staff.find((p) => p.ref === ref)?.name ?? ref
 
-export default function FinanceDashboardPage() {
+export default async function FinanceDashboardPage() {
+  const invoices = await getInvoices()
+  const expenses = await getExpenses()
+  const payrollRuns = await getPayrollRecords()
+  const staff = await getStaff()
+  const leaveRequests = await getLeaveRequests()
+  const payPeriod = await getRequestPayPeriod()
+  const months = await getMonthlyFinance()
+  const { week: attendanceWeek, today, attendancePatterns } = await getTimesheetData()
+
+  const nameFor = (ref: string) => staff.find((p) => p.ref === ref)?.name ?? ref
+
   const outstanding = invoices
     .filter((i) => i.status === 'pending' || i.status === 'overdue')
     .reduce((n, i) => n + i.amountPence, 0)
@@ -40,15 +54,21 @@ export default function FinanceDashboardPage() {
       (e.status === 'submitted' || e.status === 'approved')
   )
 
-  const months = monthlyFinance()
   const current = months[months.length - 1]
   const net = current.earnedPence - current.spentPence
 
   // Attendance and leave matter here because they drive payroll cost.
   const todayIndex = attendanceWeek.indexOf(today)
-  const codesToday = staff.map((p) => attendanceFor(p.ref)[todayIndex])
+  const codesToday = staff.map((p) => (attendancePatterns[p.ref]?.[todayIndex] ?? '-') as AttendanceCode)
   const weekHours = staff.reduce(
-    (n, p) => n + attendanceFor(p.ref).reduce((m, c) => m + attendanceHours[c], 0),
+    (n, p) => {
+      const pat = attendancePatterns[p.ref] || ''
+      let sum = 0
+      for (let c of pat) {
+        sum += attendanceHours[c as AttendanceCode] || 0
+      }
+      return n + sum
+    },
     0
   )
   const pendingLeave = leaveRequests.filter((r) => r.status === 'pending')
